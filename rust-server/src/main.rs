@@ -31,18 +31,18 @@ use router::Router;
 use router::Params;
 use rustc_serialize::json;
 use std::io::Read;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 use json_models::*;
 
 lazy_static! {    
-    static ref POOL: r2d2::Pool<ConnectionManager<PgConnection>> = {
+    static ref POOL: RwLock<r2d2::Pool<ConnectionManager<PgConnection>>> = {
         dotenv().ok();
         let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
         let config = r2d2::Config::default();
         let manager = ConnectionManager::<PgConnection>::new(db_url);
         let pool = r2d2::Pool::new(config, manager).expect("Failed to create a pool");
-        pool
+        RwLock::new(pool)
     };
 }
 
@@ -62,7 +62,7 @@ fn getHandler(r: &mut Request) -> IronResult<Response> {
     use std::i64;
     use std::str::FromStr;
     
-    let conn = POOL.get().unwrap();
+    let conn = get_db_connection();
     let cnt = r.extensions.get::<Router>().unwrap()
         .find("cnt")
         .map(|s| i64::from_str(s).unwrap())
@@ -77,7 +77,7 @@ fn getHandler(r: &mut Request) -> IronResult<Response> {
 }
 
 fn postHandler(r: &mut Request) -> IronResult<Response> {
-    let conn = POOL.get().unwrap();
+    let conn = get_db_connection();
 
     let mut s = String::with_capacity(512);
     r.body.read_to_string(&mut s);
@@ -90,7 +90,7 @@ fn postHandler(r: &mut Request) -> IronResult<Response> {
 }
 
 fn putHandler(r: &mut Request) -> IronResult<Response> {
-    let conn = POOL.get().unwrap();
+    let conn = get_db_connection();
 
     let mut s = String::with_capacity(512);
     r.body.read_to_string(&mut s);
@@ -103,7 +103,7 @@ fn putHandler(r: &mut Request) -> IronResult<Response> {
 }
 
 fn deleteHandler(r: &mut Request) -> IronResult<Response> {
-    let conn = POOL.get().unwrap();
+    let conn = get_db_connection();
 
     let mut s = String::with_capacity(16);
     r.body.read_to_string(&mut s);
@@ -120,3 +120,12 @@ fn response(s: status::Status, body: Option<Box<iron::response::WriteBody + 'sta
     response.body = body;
     Ok(response)
 }
+
+fn get_db_connection() -> r2d2::PooledConnection<ConnectionManager<PgConnection>> {
+    loop {
+        match POOL.read().unwrap().get() {
+            Err(r2d2::GetTimeout(_)) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            Ok(conn) => return conn,
+        }
+    }
+} 

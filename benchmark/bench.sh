@@ -1,16 +1,26 @@
-source $0 
+#!/bin/bash
 
-COUNT=100000
-THREADS=8
+source $1 
 
-while [[ $THREADS < 512 ]]; do
-    pushd ../rust_server/
-    diesel database reset
+COUNT=1000000
+THREADS=16
+TIMEOUT=10
+
+while [[ $THREADS -le 128 ]]; do
+    pushd ../rust-server/
+    diesel migration run 
     popd
 
-    ab -n $COUNT -c $THREADS -g tests/put-$COUNT.tsv -u data/put.json $SERVER/news
-    ab -n $COUNT -c $THREADS -g tests/get-$COUNT.tsv $SERVER/news/100
-    ab -n $COUNT -c $THREADS -g tests/push-$COUNT.tsv -p data/post.json $SERVER/news
+    ab -n $COUNT -c $THREADS -g tests/${THREADS}_put.tsv -u data/put.json $SERVER/news
+    sleep $TIMEOUT
+    ab -n $COUNT -c $THREADS -g tests/${THREADS}_get.tsv -r $SERVER/news/1
+    sleep $TIMEOUT
+    ab -n $COUNT -c $THREADS -g tests/${THREADS}_post.tsv -p data/post.json $SERVER/news
+    sleep $TIMEOUT
 
-    $THREADS=$((THREADS * 2))
+    cat template.plot | sed "s/THREADS/${THREADS}/g" | sed 's/METHOD/put/g' | gnuplot
+    cat template.plot | sed "s/THREADS/${THREADS}/g" | sed 's/METHOD/get/g' | gnuplot
+    cat template.plot | sed "s/THREADS/${THREADS}/g" | sed 's/METHOD/post/g' | gnuplot
+    
+    THREADS=$((THREADS * 2))
 done
