@@ -1,6 +1,6 @@
 use super::models;
 
-#[derive(RustcEncodable, RustcDecodable, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Article {
     pub id: i32,
     pub time: i64,
@@ -8,14 +8,14 @@ pub struct Article {
     pub text: String,
 }
 
-#[derive(RustcEncodable, RustcDecodable, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct EditArticle {
     pub id: i32,
     pub title: Option<String>,
     pub text: Option<String>
 }
 
-#[derive(RustcEncodable, RustcDecodable, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct DeleteArticle {
     pub id: i32
 }

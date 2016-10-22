@@ -6,10 +6,12 @@
 #[macro_use] extern crate diesel;
 #[macro_use] extern crate diesel_codegen;
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate serde_derive;
+extern crate serde;
+extern crate serde_json as json;
 extern crate chrono;
 extern crate dotenv;
 extern crate iron;
-extern crate rustc_serialize;
 extern crate r2d2;
 extern crate r2d2_diesel;
 
@@ -18,9 +20,7 @@ pub mod models;
 mod database;
 mod json_models;
 
-use diesel::connection::Connection;
 use diesel::pg::*;
-use r2d2::{ManageConnection, Pool};
 use r2d2_diesel::ConnectionManager;
 use dotenv::dotenv;
 use std::env;
@@ -28,37 +28,34 @@ use std::env;
 use iron::prelude::*;
 use iron::status;
 use router::Router;
-use router::Params;
-use rustc_serialize::json;
 use std::io::Read;
-use std::sync::{Arc, RwLock};
 
 use json_models::*;
 
 lazy_static! {    
-    static ref POOL: RwLock<r2d2::Pool<ConnectionManager<PgConnection>>> = {
+    static ref POOL: r2d2::Pool<ConnectionManager<PgConnection>> = {
         dotenv().ok();
         let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
         let config = r2d2::Config::default();
         let manager = ConnectionManager::<PgConnection>::new(db_url);
         let pool = r2d2::Pool::new(config, manager).expect("Failed to create a pool");
-        RwLock::new(pool)
+        pool
     };
 }
 
 fn main() {
     let router = router! (
-        get:     get    "/news/"     => getHandler,
-        get_cnt: get    "/news/:cnt" => getHandler,
-        post:    post   "/news/"     => postHandler,
-        put:     put    "/news/"     => putHandler,
-        delete:  delete "/news/"     => deleteHandler
+        get:     get    "/news/"     => get_handler,
+        get_cnt: get    "/news/:cnt" => get_handler,
+        post:    post   "/news/"     => post_handler,
+        put:     put    "/news/"     => put_handler,
+        delete:  delete "/news/"     => delete_handler
     );
 
     Iron::new(router).http("localhost:8080").unwrap();
 }
 
-fn getHandler(r: &mut Request) -> IronResult<Response> {
+fn get_handler(r: &mut Request) -> IronResult<Response> {
     use std::i64;
     use std::str::FromStr;
     
@@ -73,42 +70,42 @@ fn getHandler(r: &mut Request) -> IronResult<Response> {
         .map(|a| a.into())
         .collect();
 
-    response(status::Ok, Some(box json::encode(&articles).unwrap()))
+    response(status::Ok, Some(box json::to_string(&articles).unwrap()))
 }
 
-fn postHandler(r: &mut Request) -> IronResult<Response> {
+fn post_handler(r: &mut Request) -> IronResult<Response> {
     let conn = get_db_connection();
 
     let mut s = String::with_capacity(512);
-    r.body.read_to_string(&mut s);
+    r.body.read_to_string(&mut s).unwrap();
 
-    let edit_article: EditArticle = json::decode(&s).unwrap();
+    let edit_article: EditArticle = json::from_str(&s).unwrap();
 
     database::edit_article(&conn, edit_article);
 
     response(status::Ok, Some(box "{}"))
 }
 
-fn putHandler(r: &mut Request) -> IronResult<Response> {
+fn put_handler(r: &mut Request) -> IronResult<Response> {
     let conn = get_db_connection();
 
     let mut s = String::with_capacity(512);
-    r.body.read_to_string(&mut s);
+    r.body.read_to_string(&mut s).unwrap();
 
-    let new_article: models::NewArticle = json::decode(&s).unwrap();
+    let new_article: models::NewArticle = json::from_str(&s).unwrap();
 
     database::create_article(&conn, new_article);
 
     response(status::Ok, Some(box "{}"))
 }
 
-fn deleteHandler(r: &mut Request) -> IronResult<Response> {
+fn delete_handler(r: &mut Request) -> IronResult<Response> {
     let conn = get_db_connection();
 
     let mut s = String::with_capacity(16);
-    r.body.read_to_string(&mut s);
+    r.body.read_to_string(&mut s).unwrap();
 
-    let delete_article: DeleteArticle = json::decode(&s).unwrap();
+    let delete_article: DeleteArticle = json::from_str(&s).unwrap();
 
     database::delete_article(&conn, delete_article);
     
@@ -123,7 +120,7 @@ fn response(s: status::Status, body: Option<Box<iron::response::WriteBody + 'sta
 
 fn get_db_connection() -> r2d2::PooledConnection<ConnectionManager<PgConnection>> {
     loop {
-        match POOL.read().unwrap().get() {
+        match POOL.get() {
             Err(r2d2::GetTimeout(_)) => std::thread::sleep(std::time::Duration::from_millis(10)),
             Ok(conn) => return conn,
         }

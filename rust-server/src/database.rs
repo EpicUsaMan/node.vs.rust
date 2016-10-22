@@ -29,13 +29,15 @@ pub fn edit_article(conn: &PgConnection, to_edit: json_models::EditArticle) {
     if let Some(new_title) = to_edit.title {
         diesel::update(news.find(to_edit.id))
             .set(title.eq(new_title))
-            .execute(conn);
+            .execute(conn)
+            .unwrap();
     }
 
     if let Some(new_text) = to_edit.text {
         diesel::update(news.find(to_edit.id))
             .set(text.eq(new_text))
-            .execute(conn);
+            .execute(conn)
+            .unwrap();
     }
 }
 
@@ -43,5 +45,6 @@ pub fn delete_article(conn: &PgConnection, to_delete: json_models::DeleteArticle
     use schema::news::dsl::*;
 
     diesel::delete(news.find(to_delete.id))
-        .execute(conn);
+        .execute(conn)
+        .unwrap();
 }
