@@ -1,1 +1,17 @@
-SERVER="http://localhost:0000/"
+#!/bin/sh
+
+SERVER="http://localhost:3000/"
+
+function PREPARE {
+  pushd ../node-server/
+    npm i
+  popd
+}
+
+function RUN {
+  node ../node-server/src/server.js
+}
+
+function KILL {
+  killall node
+}

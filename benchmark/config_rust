@@ -1,3 +1,17 @@
+#!/bin/sh
+
 SERVER="http://localhost:8080/"
-RUN="../rust-server/target/release/rust-server"
-KILL="killall rust-server"
+
+function PREPARE {
+  pushd ../rust-server/
+    diesel migration run
+  popd
+}
+
+function RUN {
+  ../rust-server/target/release/rust-server
+}
+
+function KILL {
+  killall rust-server
+}
