@@ -2,156 +2,82 @@
 #![feature(conservative_impl_trait)]
 #![feature(generators)]
 #![feature(proc_macro)]
+#![feature(plugin)]
+#![plugin(rocket_codegen)]
+
+extern crate num_cpus;
+extern crate rocket;
+extern crate rocket_contrib;
 
 #[macro_use]
 extern crate diesel;
+extern crate dotenv;
+extern crate r2d2;
+extern crate r2d2_diesel;
+
 #[macro_use]
 extern crate serde_derive;
 
 extern crate chrono;
-extern crate dotenv;
-extern crate r2d2;
-extern crate r2d2_diesel;
 extern crate serde;
 extern crate serde_json as json;
-
-extern crate futures_await as futures;
-extern crate futures_cpupool;
-extern crate hyper;
-extern crate tokio_core;
 
 pub mod schema;
 pub mod models;
 mod database;
 mod json_models;
 
-use serde::Serialize;
-
-use std::rc::Rc;
+use rocket::State;
+use rocket_contrib::Json;
 
 use json_models::*;
-
-use hyper::server::{const_service, service_fn, Http, Request, Response};
-use hyper::Method;
-
-use futures::prelude::*;
-use futures::future;
-
 use database::Database;
 
-type HyperResult<T> = Result<T, hyper::Error>;
+#[get("/news")]
+#[inline]
+fn news_get(db: State<Database>) -> Json<Vec<Article>> {
+    use std::i64;
+    Json(db.get_articles(i64::MAX))
+}
+
+#[get("/news/<cnt>")]
+#[inline]
+fn news_get_cnt(db: State<Database>, cnt: i64) -> Json<Vec<Article>> {
+    Json(db.get_articles(cnt))
+}
+
+#[post("/news", data = "<input>")]
+#[inline]
+fn news_post(db: State<Database>, input: Json<EditArticle>) -> &'static str {
+    db.edit_article(input.into_inner());
+    "{}"
+}
+
+#[put("/news", data = "<input>")]
+#[inline]
+fn news_put(db: State<Database>, input: Json<models::NewArticle>) -> &'static str {
+    db.create_article(input.into_inner());
+    "{}"
+}
+
+#[delete("/news", data = "<input>")]
+#[inline]
+fn news_delete(db: State<Database>, input: Json<DeleteArticle>) -> &'static str {
+    db.delete_article(input.into_inner());
+    "{}"
+}
 
 fn main() {
-    let database = Database::new();
-    let database = Rc::new(database);
+    use rocket::config::LoggingLevel;
 
-    println!("Connected to database");
+    let mut config = rocket::Config::production().unwrap();
+    config.set_address("localhost").unwrap();
+    config.set_port(8000);
+    config.set_workers(num_cpus::get() as u16);
+    config.set_log_level(LoggingLevel::Critical);
 
-    let addr = "127.0.0.1:8080".parse().unwrap();
-
-    /*
-    let router = router! (
-        get:     get    "/news/"     => get_handler,
-        get_cnt: get    "/news/:cnt" => get_handler,
-        post:    post   "/news/"     => post_handler,
-        put:     put    "/news/"     => put_handler,
-        delete:  delete "/news/"     => delete_handler
-    );
-    */
-
-    let cpupool = futures_cpupool::CpuPool::new_num_cpus();
-
-    let router = service_fn(move |req: Request| {
-        let database = database.clone();
-        cpupool.spawn(move || {
-            match *req.method() {
-                Method::Get => get_handler(database, req),
-                Method::Post => post_handler(database, req),
-                Method::Put => put_handler(database, req),
-                Method::Delete => delete_handler(database, req),
-                _ => box future::ok(resp_not_found()),
-            }
-        })
-    });
-
-    let router = const_service(router);
-
-    println!("Listening on {}", addr);
-
-    Http::new().bind(&addr, router).unwrap().run().unwrap();
-}
-
-#[async(boxed)]
-fn get_handler(db: Rc<Database>, req: Request) -> HyperResult<Response> {
-    if let Ok(cnt) = parse_get_news(req.path()) {
-        let articles: Vec<Article> = await!(db.get_articles(cnt)).unwrap().into_iter().collect();
-        Ok(resp_ok(articles))
-    } else {
-        Ok(resp_not_found())
-    }
-}
-
-fn parse_get_news(url: &str) -> Result<i64, ()> {
-    use std::i64;
-    use std::str::FromStr;
-
-    let mut parts = url.split("/");
-
-    if parts.next() != Some("news") {
-        return Err(());
-    }
-
-    if let Some(cnt) = parts.next() {
-        // ensure there is no other parts
-        if parts.next().is_none() {
-            return Ok(i64::from_str(cnt).map_err(|_| ())?);
-        } else {
-            return Err(());
-        }
-    } else {
-        return Ok(i64::MAX);
-    }
-}
-
-#[async(boxed)]
-fn post_handler(db: Rc<Database>, req: Request) -> HyperResult<Response> {
-    let body = await!(req.body().concat2())?;
-    let edit_article: EditArticle = json::from_slice(&body).unwrap();
-
-    await!(db.edit_article(edit_article)).unwrap();
-
-    Ok(resp_ok("{}"))
-}
-
-#[async(boxed)]
-fn put_handler(db: Rc<Database>, req: Request) -> HyperResult<Response> {
-    let body = await!(req.body().concat2())?;
-    let new_article: models::NewArticle = json::from_slice(&body).unwrap();
-
-    await!(db.create_article(new_article)).unwrap();
-
-    Ok(resp_ok("{}"))
-}
-
-#[async(boxed)]
-fn delete_handler(db: Rc<Database>, req: Request) -> HyperResult<Response> {
-    let body = await!(req.body().concat2())?;
-    let delete_article: DeleteArticle = json::from_slice(&body).unwrap();
-
-    await!(db.delete_article(delete_article)).unwrap();
-
-    Ok(resp_ok("{}"))
-}
-
-fn resp_ok<S: Serialize>(body: S) -> Response {
-    let mut response = Response::new();
-    response.set_status(hyper::Ok);
-    response.set_body(json::to_string(&body).unwrap());
-    response
-}
-
-fn resp_not_found() -> Response {
-    let mut response = Response::new();
-    response.set_status(hyper::NotFound);
-    response
+    rocket::custom(config, false)
+        .mount("/", routes![news_get, news_get_cnt, news_post, news_put])
+        .manage(Database::new())
+        .launch();
 }

@@ -21,6 +21,7 @@ pub struct DeleteArticle {
 }
 
 impl From<models::Article> for Article {
+    #[inline]
     fn from(a: models::Article) -> Article {
         Article {
             id: a.id,
