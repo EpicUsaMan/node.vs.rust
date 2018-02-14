@@ -1,7 +1,3 @@
-#![feature(box_syntax)]
-#![feature(conservative_impl_trait)]
-#![feature(generators)]
-#![feature(proc_macro)]
 #![feature(plugin)]
 #![plugin(rocket_codegen)]
 
