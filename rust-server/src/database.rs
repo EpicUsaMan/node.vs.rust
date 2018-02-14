@@ -1,50 +1,101 @@
+use std::env;
+use dotenv::dotenv;
+
 use super::models::*;
 use super::json_models;
 use diesel::prelude::*;
 use diesel::pg::PgConnection;
 use diesel;
 
-pub fn create_article<'a>(conn: &PgConnection, new_article: NewArticle)  {
-    use schema::news;
+use r2d2::{Pool, PooledConnection};
+use r2d2_diesel::ConnectionManager;
 
-    diesel::insert(&new_article).into(news::table)
-        .get_result::<Article>(conn)
-        .expect("Error inserting new article");
-} 
+use futures_cpupool::CpuPool;
+use futures::Future;
 
-pub fn get_articles(conn: &PgConnection, cnt: i64) -> Vec<json_models::Article> {
-    use schema::news::dsl::*;
+type DbPool = Pool<ConnectionManager<PgConnection>>;
+type Conn = PooledConnection<ConnectionManager<PgConnection>>;
 
-    news.limit(cnt)
-        .load::<Article>(conn)
-        .expect("Error loading articles")
-        .into_iter()
-        .map(|a| json_models::Article::from(a))
-        .collect()
+pub struct Database {
+    db_pool: DbPool,
+    thread_pool: CpuPool,
 }
 
-pub fn edit_article(conn: &PgConnection, to_edit: json_models::EditArticle) {
-    use schema::news::dsl::*;
-
-    if let Some(new_title) = to_edit.title {
-        diesel::update(news.find(to_edit.id))
-            .set(title.eq(new_title))
-            .execute(conn)
-            .unwrap();
+impl Database {
+    pub fn new() -> Self {
+        Database {
+            db_pool: {
+                dotenv().ok();
+                let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+                let manager = ConnectionManager::<PgConnection>::new(db_url);
+                Pool::builder().max_size(16).build(manager).expect("Failed to create a pool")
+            },
+            thread_pool: CpuPool::new(16),
+        }
     }
 
-    if let Some(new_text) = to_edit.text {
-        diesel::update(news.find(to_edit.id))
-            .set(text.eq(new_text))
-            .execute(conn)
-            .unwrap();
+    fn spawn_async<R, F>(&self, f: F) -> impl Future<Item = R, Error = ()>
+    where
+        R: Send + 'static,
+        F: Sync + Send + 'static + FnOnce(Conn) -> R,
+    {
+        let conn = self.db_pool.get().expect("failed to get pooled connection");
+        self.thread_pool.spawn_fn(move || Ok(f(conn)))
     }
-}
 
-pub fn delete_article(conn: &PgConnection, to_delete: json_models::DeleteArticle) {
-    use schema::news::dsl::*;
+    pub fn create_article(&self, new_article: NewArticle) -> impl Future<Item = (), Error = ()> {
+        use schema::news;
 
-    diesel::delete(news.find(to_delete.id))
-        .execute(conn)
-        .unwrap();
+        self.spawn_async(move |conn| {
+            diesel::insert_into(news::table)
+                .values(&new_article)
+                .execute(&*conn)
+                .expect("Error inserting new article");
+        })
+    }
+
+    pub fn get_articles(
+        &self,
+        cnt: i64,
+    ) -> impl Future<Item = Vec<json_models::Article>, Error = ()> {
+        use schema::news::dsl::*;
+        self.spawn_async(move |conn| {
+            news.limit(cnt)
+                .load::<Article>(&*conn)
+                .expect("Error loading articles")
+                .into_iter()
+                .map(|a| json_models::Article::from(a))
+                .collect()
+        })
+    }
+
+    pub fn edit_article(
+        &self,
+        to_edit: json_models::EditArticle,
+    ) -> impl Future<Item = (), Error = ()> {
+        use schema::news::dsl::*;
+
+        self.spawn_async(move |conn| {
+            diesel::update(news.find(to_edit.id))
+                .set(&UpdateArticle {
+                    title: to_edit.title,
+                    text: to_edit.text,
+                })
+                .execute(&*conn)
+                .unwrap();
+        })
+    }
+
+    pub fn delete_article(
+        &self,
+        to_delete: json_models::DeleteArticle,
+    ) -> impl Future<Item = (), Error = ()> {
+        use schema::news::dsl::*;
+
+        self.spawn_async(move |conn| {
+            diesel::delete(news.find(to_delete.id))
+                .execute(&*conn)
+                .unwrap();
+        })
+    }
 }

@@ -12,12 +12,12 @@ pub struct Article {
 pub struct EditArticle {
     pub id: i32,
     pub title: Option<String>,
-    pub text: Option<String>
+    pub text: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeleteArticle {
-    pub id: i32
+    pub id: i32,
 }
 
 impl From<models::Article> for Article {
@@ -26,7 +26,7 @@ impl From<models::Article> for Article {
             id: a.id,
             time: a.time.timestamp(),
             title: a.title,
-            text: a.text
+            text: a.text,
         }
     }
 }
