@@ -9,7 +9,7 @@ function PREPARE {
 }
 
 function RUN {
-  node ../node-server/src/server.js
+  node ../node-server/src/server.js &
 }
 
 function KILL {

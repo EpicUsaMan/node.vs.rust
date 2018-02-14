@@ -1,15 +1,18 @@
 #!/bin/sh
 
-SERVER="http://localhost:8080/"
+SERVER="http://localhost:8000/"
 
 function PREPARE {
   pushd ../rust-server/
     diesel migration run
+    cargo build --release
   popd
 }
 
 function RUN {
-  ../rust-server/target/release/rust-server
+  pushd ../rust-server
+    target/release/rust-server &
+  popd
 }
 
 function KILL {
