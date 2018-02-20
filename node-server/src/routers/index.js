@@ -1,7 +1,7 @@
 const router = require("express").Router();
 
 module.exports = news => {
-  router.get("/", (req, res) => {
+  router.get("/news", (req, res) => {
     if (!req.query.id) {
       news.findAll().then(result => res.json(result));
     } else {
@@ -15,7 +15,7 @@ module.exports = news => {
     }
   });
 
-  router.post("/", (req, res) => {
+  router.post("/news", (req, res) => {
     news.update(
       {
         title: req.body.title,
@@ -31,7 +31,7 @@ module.exports = news => {
     res.json();
   });
 
-  router.put("/", (req, res) => {
+  router.put("/news", (req, res) => {
     news.create({
       title: req.body.title,
       text: req.body.text
@@ -40,7 +40,7 @@ module.exports = news => {
     res.json();
   });
 
-  router.delete("/", (req, res) => {
+  router.delete("/news", (req, res) => {
     news.destroy({
       where: req.body.id
     });
