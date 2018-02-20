@@ -11,11 +11,13 @@ if (cluster.isMaster) {
   const app = require("express")(),
     Sequelize = require("sequelize"),
     bodyParser = require("body-parser"),
-    sequelize = new Sequelize("postgres://localhost/news"),
+    sequelize = new Sequelize("postgres://test:test@localhost/news"),
     news = require("./models/news")(sequelize, Sequelize);
 
   app.use(bodyParser.json());
   app.use(require("./routers")(news));
 
-  app.listen(3000);
+  news.sync().then(e => {
+    app.listen(3000);
+  });
 }

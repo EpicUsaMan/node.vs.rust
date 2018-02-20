@@ -2,16 +2,16 @@ const router = require("express").Router();
 
 module.exports = news => {
   router.get("/", (req, res) => {
-    if (!req.body.id) {
-      news.findAll().then(result => router.json(result));
+    if (!req.query.id) {
+      news.findAll().then(result => res.json(result));
     } else {
       news
         .findAll({
           where: {
-            id: req.body.id
+            id: req.query.id
           }
         })
-        .then(result => router.json(result));
+        .then(result => res.json(result));
     }
   });
 
