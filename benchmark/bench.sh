@@ -2,8 +2,8 @@
 
 source $1
 
-COUNT=1000000
-THREADS=16
+DURATION=30s
+THREADS=64
 TIMEOUT=5
 
 PREPARE
@@ -11,15 +11,14 @@ RUN
 
 while [[ $THREADS -le 128 ]]; do
     sleep $TIMEOUT
-    ab -n $COUNT -c $THREADS -g tests/${1}_${THREADS}_put.tsv -u data/put.json $SERVER/news
+    echo "   >>> Benchmarking PUT <<<"
+    wrk -t 4 -d $DURATION -c $THREADS -s data/put.lua $SERVER/news
     sleep $TIMEOUT
-    ab -n $COUNT -c $THREADS -g tests/${1}_${THREADS}_get.tsv -r $SERVER/news/1
+    echo "   >>> Benchmarking GET <<<"
+    wrk -t 4 -d $DURATION -c $THREADS $SERVER/news/1
     sleep $TIMEOUT
-    ab -n $COUNT -c $THREADS -g tests/${1}_${THREADS}_post.tsv -p data/post.json $SERVER/news
-
-    cat template.plot | sed "s/THREADS/${THREADS}/g" | sed 's/METHOD/put/g' | gnuplot
-    cat template.plot | sed "s/THREADS/${THREADS}/g" | sed 's/METHOD/get/g' | gnuplot
-    cat template.plot | sed "s/THREADS/${THREADS}/g" | sed 's/METHOD/post/g' | gnuplot
+    echo "   >>> Benchmarking POST <<<"
+    wrk -t 4 -d $DURATION -c $THREADS -s data/post.lua $SERVER/news
 
     THREADS=$((THREADS * 2))
 done
