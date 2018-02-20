@@ -16,39 +16,34 @@ module.exports = news => {
   });
 
   router.post("/", (req, res) => {
-    news
-      .findAll({
+    news.update(
+      {
+        title: req.body.title,
+        text: req.body.text
+      },
+      {
         where: {
           id: req.body.id
         }
-      })
-      .set({
-        title: req.body.title,
-        text: req.body.text
-      })
-      .save();
+      }
+    );
 
     res.json();
   });
 
   router.put("/", (req, res) => {
-    news
-      .create({
-        title: req.body.title,
-        text: req.body.text
-      })
-      .save();
+    news.create({
+      title: req.body.title,
+      text: req.body.text
+    });
 
     res.json();
   });
 
   router.delete("/", (req, res) => {
-    news
-      .findAll({
-        where: req.body.id
-      })
-      .destroy()
-      .save();
+    news.destroy({
+      where: req.body.id
+    });
 
     res.json();
   });

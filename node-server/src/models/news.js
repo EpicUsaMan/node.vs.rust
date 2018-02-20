@@ -5,10 +5,6 @@ module.exports = (sequelize, types) => {
       primaryKey: true,
       autoIncrement: true
     },
-    time: {
-      type: types.BIGINT,
-      defaultValue: types.NOW
-    },
     title: {
       type: types.STRING,
       allowNull: false
