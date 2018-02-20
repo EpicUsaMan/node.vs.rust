@@ -1,28 +1,33 @@
 [package]
+authors = ["Mike Lubinets <lubinetsm@yandex.ru>"]
 name = "rust-server"
 version = "0.1.0"
-authors = ["Mike Lubinets <lubinetsm@yandex.ru>"]
 
 [dependencies]
-lazy_static = "*"
-iron = "*"
-router = "*"
-hyper = "*"
-serde = "0.8"
-serde_derive = "0.8"
-serde_json = "0.8"
-chrono = { version = "0.2", features = ["rustc-serialize"]}
-diesel = { version = "0.8", features = ["postgres", "chrono"] }
-diesel_codegen = { version = "0.8", features = ["postgres"] }
-dotenv = "*"
-r2d2 = "0.7.0"
-r2d2-diesel = "0.8.0"
+dotenv = "0.10"
+r2d2 = "0.8"
+r2d2-diesel = "1.0"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+rocket = "0.3.6"
+rocket_codegen = "0.3.6"
+rocket_contrib = "0.3.6"
+num_cpus = "1.8.0"
+
+
+[dependencies.chrono]
+features = ["serde"]
+version = "0.4"
+
+[dependencies.diesel]
+features = ["postgres", "chrono"]
+version = "1.1"
 
 [profile.release]
-opt-level = 3
 debug = false
-rpath = false
-lto = true
 debug-assertions = false
-codegen-units = 1
-panic = 'unwind'
+lto = true
+opt-level = 3
+panic = "unwind"
+rpath = false

@@ -1,1 +1,5 @@
 node_modules
+target/
+benchmark/graphs
+benchmark/tests
+package-lock.json

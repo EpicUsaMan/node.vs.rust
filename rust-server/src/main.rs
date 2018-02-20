@@ -1,128 +1,79 @@
-#![feature(proc_macro)]
-#![feature(custom_derive)]
-#![feature(custom_attribute)]
-#![feature(box_syntax)]
-#[macro_use] extern crate router;
-#[macro_use] extern crate diesel;
-#[macro_use] extern crate diesel_codegen;
-#[macro_use] extern crate lazy_static;
-#[macro_use] extern crate serde_derive;
-extern crate serde;
-extern crate serde_json as json;
-extern crate chrono;
+#![feature(plugin)]
+#![plugin(rocket_codegen)]
+
+extern crate num_cpus;
+extern crate rocket;
+extern crate rocket_contrib;
+
+#[macro_use]
+extern crate diesel;
 extern crate dotenv;
-extern crate iron;
 extern crate r2d2;
 extern crate r2d2_diesel;
+
+#[macro_use]
+extern crate serde_derive;
+
+extern crate chrono;
+extern crate serde;
+extern crate serde_json as json;
 
 pub mod schema;
 pub mod models;
 mod database;
 mod json_models;
 
-use diesel::pg::*;
-use r2d2_diesel::ConnectionManager;
-use dotenv::dotenv;
-use std::env;
-
-use iron::prelude::*;
-use iron::status;
-use router::Router;
-use std::io::Read;
+use rocket::State;
+use rocket_contrib::Json;
 
 use json_models::*;
+use database::Database;
 
-lazy_static! {    
-    static ref POOL: r2d2::Pool<ConnectionManager<PgConnection>> = {
-        dotenv().ok();
-        let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-        let config = r2d2::Config::default();
-        let manager = ConnectionManager::<PgConnection>::new(db_url);
-        let pool = r2d2::Pool::new(config, manager).expect("Failed to create a pool");
-        pool
-    };
+#[get("/news")]
+#[inline]
+fn news_get(db: State<Database>) -> Json<Vec<Article>> {
+    use std::i64;
+    Json(db.get_articles(i64::MAX))
+}
+
+#[get("/news/<cnt>")]
+#[inline]
+fn news_get_cnt(db: State<Database>, cnt: i64) -> Json<Vec<Article>> {
+    Json(db.get_articles(cnt))
+}
+
+#[post("/news", data = "<input>")]
+#[inline]
+fn news_post(db: State<Database>, input: Json<EditArticle>) -> &'static str {
+    db.edit_article(input.into_inner());
+    "{}"
+}
+
+#[put("/news", data = "<input>")]
+#[inline]
+fn news_put(db: State<Database>, input: Json<models::NewArticle>) -> &'static str {
+    db.create_article(input.into_inner());
+    "{}"
+}
+
+#[delete("/news", data = "<input>")]
+#[inline]
+fn news_delete(db: State<Database>, input: Json<DeleteArticle>) -> &'static str {
+    db.delete_article(input.into_inner());
+    "{}"
 }
 
 fn main() {
-    let router = router! (
-        get:     get    "/news/"     => get_handler,
-        get_cnt: get    "/news/:cnt" => get_handler,
-        post:    post   "/news/"     => post_handler,
-        put:     put    "/news/"     => put_handler,
-        delete:  delete "/news/"     => delete_handler
-    );
+    use rocket::config::LoggingLevel;
 
-    Iron::new(router).http("localhost:8080").unwrap();
+    let mut config = rocket::Config::production().unwrap();
+    config.set_address("localhost").unwrap();
+    config.set_port(8000);
+    config.set_workers(num_cpus::get() as u16);
+    config.set_log_level(LoggingLevel::Critical);
+
+    rocket::custom(config, false)
+        .mount("/", routes![news_get, news_get_cnt, news_post, news_put])
+        .manage(Database::new())
+        .launch();
 }
-
-fn get_handler(r: &mut Request) -> IronResult<Response> {
-    use std::i64;
-    use std::str::FromStr;
-    
-    let conn = get_db_connection();
-    let cnt = r.extensions.get::<Router>().unwrap()
-        .find("cnt")
-        .map(|s| i64::from_str(s).unwrap())
-        .unwrap_or(i64::MAX);
-
-    let articles: Vec<Article> = database::get_articles(&conn, cnt)
-        .into_iter()
-        .map(|a| a.into())
-        .collect();
-
-    response(status::Ok, Some(box json::to_string(&articles).unwrap()))
-}
-
-fn post_handler(r: &mut Request) -> IronResult<Response> {
-    let conn = get_db_connection();
-
-    let mut s = String::with_capacity(512);
-    r.body.read_to_string(&mut s).unwrap();
-
-    let edit_article: EditArticle = json::from_str(&s).unwrap();
-
-    database::edit_article(&conn, edit_article);
-
-    response(status::Ok, Some(box "{}"))
-}
-
-fn put_handler(r: &mut Request) -> IronResult<Response> {
-    let conn = get_db_connection();
-
-    let mut s = String::with_capacity(512);
-    r.body.read_to_string(&mut s).unwrap();
-
-    let new_article: models::NewArticle = json::from_str(&s).unwrap();
-
-    database::create_article(&conn, new_article);
-
-    response(status::Ok, Some(box "{}"))
-}
-
-fn delete_handler(r: &mut Request) -> IronResult<Response> {
-    let conn = get_db_connection();
-
-    let mut s = String::with_capacity(16);
-    r.body.read_to_string(&mut s).unwrap();
-
-    let delete_article: DeleteArticle = json::from_str(&s).unwrap();
-
-    database::delete_article(&conn, delete_article);
-    
-    response(status::Ok, Some(box "{}"))
-}
-
-fn response(s: status::Status, body: Option<Box<iron::response::WriteBody + 'static>>) -> IronResult<Response> {
-    let mut response = Response::with(s);
-    response.body = body;
-    Ok(response)
-}
-
-fn get_db_connection() -> r2d2::PooledConnection<ConnectionManager<PgConnection>> {
-    loop {
-        match POOL.get() {
-            Err(r2d2::GetTimeout(_)) => std::thread::sleep(std::time::Duration::from_millis(10)),
-            Ok(conn) => return conn,
-        }
-    }
-} 
