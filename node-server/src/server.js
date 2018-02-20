@@ -11,7 +11,9 @@ if (cluster.isMaster) {
   const app = require("express")(),
     Sequelize = require("sequelize"),
     bodyParser = require("body-parser"),
-    sequelize = new Sequelize("postgres://test:test@localhost/news"),
+    sequelize = new Sequelize("postgres://test:test@localhost/news", {
+      logging: false
+    }),
     news = require("./models/news")(sequelize, Sequelize);
 
   app.use(bodyParser.json());
