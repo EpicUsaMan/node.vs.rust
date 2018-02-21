@@ -13,14 +13,18 @@ if (cluster.isMaster) {
     bodyParser = require("body-parser"),
     sequelize = new Sequelize("postgres://test:test@localhost/news", {
       logging: false,
-      operatorsAliases: false
+      operatorsAliases: false /** Fix of @see https://github.com/sequelize/sequelize/issues/8417 */
     }),
     news = require("./models/news")(sequelize, Sequelize);
 
   app.use(bodyParser.json());
   app.use(require("./routers")(news));
 
-  news.sync().then(e => {
-    app.listen(3000);
-  });
+  news
+    .sync({
+      force: true
+    })
+    .then(e => {
+      app.listen(3000);
+    });
 }
