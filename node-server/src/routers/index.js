@@ -2,12 +2,12 @@ const router = require("express").Router();
 
 module.exports = news => {
   router.get("/news/:limit?", (req, res) => {
-    if (!req.params.id) {
+    if (!req.params.limit) {
       news.findAll().then(result => res.json(result));
     } else {
       news
         .findAll({
-          limit: req.params.id
+          limit: req.params.limit
         })
         .then(result => res.json(result));
     }

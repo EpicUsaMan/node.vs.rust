@@ -1,9 +1,18 @@
+use chrono::{DateTime, Utc};
 use super::models;
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Article {
     pub id: i32,
-    pub time: i64,
+    pub title: String,
+    pub text: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NewArticle {
     pub title: String,
     pub text: String,
 }
@@ -25,9 +34,10 @@ impl From<models::Article> for Article {
     fn from(a: models::Article) -> Article {
         Article {
             id: a.id,
-            time: a.time.timestamp(),
             title: a.title,
             text: a.text,
+            created_at: a.createdAt,
+            updated_at: a.updatedAt,
         }
     }
 }
