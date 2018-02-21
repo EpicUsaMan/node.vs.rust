@@ -1,15 +1,13 @@
 const router = require("express").Router();
 
 module.exports = news => {
-  router.get("/news", (req, res) => {
-    if (!req.query.id) {
+  router.get("/news/:limit?", (req, res) => {
+    if (!req.params.id) {
       news.findAll().then(result => res.json(result));
     } else {
       news
         .findAll({
-          where: {
-            id: req.query.id
-          }
+          limit: req.params.id
         })
         .then(result => res.json(result));
     }

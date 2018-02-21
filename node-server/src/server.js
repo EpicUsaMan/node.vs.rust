@@ -12,7 +12,8 @@ if (cluster.isMaster) {
     Sequelize = require("sequelize"),
     bodyParser = require("body-parser"),
     sequelize = new Sequelize("postgres://test:test@localhost/news", {
-      logging: false
+      logging: false,
+      operatorsAliases: false
     }),
     news = require("./models/news")(sequelize, Sequelize);
 
