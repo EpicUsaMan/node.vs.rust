@@ -7,6 +7,8 @@ use diesel::prelude::*;
 use diesel::pg::PgConnection;
 use diesel;
 
+use chrono::Utc;
+
 use r2d2::Pool;
 use r2d2_diesel::ConnectionManager;
 
@@ -33,7 +35,6 @@ impl Database {
 
     pub fn create_article(&self, new_article: NewArticle) {
         use schema::news;
-
         let conn = self.db_pool.get().unwrap();
 
         diesel::insert_into(news::table)
@@ -55,11 +56,13 @@ impl Database {
 
     pub fn edit_article(&self, to_edit: json_models::EditArticle) {
         use schema::news::dsl::*;
+        let time = Utc::now();
         let conn = self.db_pool.get().unwrap();
         diesel::update(news.find(to_edit.id))
             .set(&UpdateArticle {
                 title: to_edit.title,
                 text: to_edit.text,
+                updatedAt: time
             })
             .execute(&*conn)
             .unwrap();

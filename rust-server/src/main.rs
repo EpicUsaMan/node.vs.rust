@@ -51,8 +51,9 @@ fn news_post(db: State<Database>, input: Json<EditArticle>) -> &'static str {
 
 #[put("/news", data = "<input>")]
 #[inline]
-fn news_put(db: State<Database>, input: Json<models::NewArticle>) -> &'static str {
-    db.create_article(input.into_inner());
+fn news_put(db: State<Database>, input: Json<NewArticle>) -> &'static str {
+    let new_article = models::NewArticle::from(input.into_inner());
+    db.create_article(new_article);
     "{}"
 }
 
@@ -69,7 +70,7 @@ fn main() {
     let mut config = rocket::Config::production().unwrap();
     config.set_address("localhost").unwrap();
     config.set_port(8000);
-    config.set_workers(num_cpus::get() as u16);
+    config.set_workers(64);
     config.set_log_level(LoggingLevel::Critical);
 
     rocket::custom(config, false)
